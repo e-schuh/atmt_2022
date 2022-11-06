@@ -2444,7 +2444,7 @@ cat@@ 2
 ke 2
 ack@@ 2
 card 2
-j 2
+J 2
 quat@@ 2
 bli@@ 2
 œur 2
@@ -2655,6 +2655,7 @@ oner 1
 N 1
 wn 1
 9 1
+j 1
 vac@@ 1
 sement 1
 hosp@@ 1
@@ -2748,7 +2749,6 @@ vern@@ 1
 fortable 1
 ids 1
 hô@@ 1
-J 1
 ermin@@ 1
 OK 1
 hai@@ 1

@@ -25,8 +25,8 @@ class LSTMModel(Seq2SeqModel):
         parser.add_argument('--encoder-hidden-size', type=int, help='encoder hidden size')
         parser.add_argument('--encoder-num-layers', type=int, help='number of encoder layers')
         parser.add_argument('--encoder-bidirectional', help='bidirectional encoder')
-        parser.add_argument('--encoder-dropout-in', help='dropout probability for encoder input embedding')
-        parser.add_argument('--encoder-dropout-out', help='dropout probability for encoder output')
+        parser.add_argument('--encoder-dropout-in', type=float, help='dropout probability for encoder input embedding')
+        parser.add_argument('--encoder-dropout-out', type=float, help='dropout probability for encoder output')
 
         parser.add_argument('--decoder-embed-dim', type=int, help='decoder embedding dimension')
         parser.add_argument('--decoder-embed-path', help='path to pre-trained decoder embedding')

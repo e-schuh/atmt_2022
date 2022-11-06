@@ -28,27 +28,18 @@ cat $data/preprocessed/bpe/train.$src.p | perl moses_scripts/truecase.perl --mod
 cat $data/preprocessed/bpe/train.$tgt.p | perl moses_scripts/truecase.perl --model $data/preprocessed/bpe/tm.$tgt > $data/preprocessed/bpe/train.$tgt.trc
 
 # Learn byte pair encoding on the concatenation of the training text, and get resulting vocabulary for each:
-python subword_nmt/learn_joint_bpe_and_vocab.py --input $data/preprocessed/bpe/train.$src.trc $data/preprocessed/bpe/train.$tgt.trc -s 3800 -o $src$tgt.bpe --write-vocabulary $data/preprocessed/bpe/train.vocab.$src $data/preprocessed/bpe/train.vocab.$tgt
-#cat $data/preprocessed/bpe/train.$src.trc $data/preprocessed/bpe/train.$tgt.trc | python subword_nmt/learn_bpe.py -s 20000 > $src$tgt.bpe
+python subword_nmt/learn_joint_bpe_and_vocab.py --input $data/preprocessed/bpe/train.$src.trc $data/preprocessed/bpe/train.$tgt.trc -s 3800 -o $data/preprocessed/bpe/$src$tgt.bpe --write-vocabulary $data/preprocessed/bpe/train.vocab.$src $data/preprocessed/bpe/train.vocab.$tgt
 
 # re-apply byte pair encoding with vocabulary filter:
-#python3 subword_nmt/apply_bpe.py -c $src$tgt.bpe --vocabulary $data/preprocessed/bpe/train.vocab.$src --vocabulary-threshold 50 < $data/preprocessed/bpe/train.$src.trc > $data/preprocessed/bpe/train.$src
-#python3 subword_nmt/apply_bpe.py -c $src$tgt.bpe --vocabulary $data/preprocessed/bpe/train.vocab.$tgt --vocabulary-threshold 50 < $data/preprocessed/bpe/train.$tgt.trc > $data/preprocessed/bpe/train.$tgt
-python3 subword_nmt/apply_bpe.py -c $src$tgt.bpe --vocabulary $data/preprocessed/bpe/train.vocab.$src < $data/preprocessed/bpe/train.$src.trc > $data/preprocessed/bpe/train.$src
-python3 subword_nmt/apply_bpe.py -c $src$tgt.bpe --vocabulary $data/preprocessed/bpe/train.vocab.$tgt < $data/preprocessed/bpe/train.$tgt.trc > $data/preprocessed/bpe/train.$tgt
-
-# apply BPE to splits
-#python3 subword_nmt/apply_bpe.py -c $src$tgt.bpe < $data/preprocessed/bpe/train.$src.trc > $data/preprocessed/bpe/train.$src
-#python3 subword_nmt/apply_bpe.py -c $src$tgt.bpe < $data/preprocessed/bpe/train.$tgt.trc > $data/preprocessed/bpe/train.$tgt
+python3 subword_nmt/apply_bpe.py -c $data/preprocessed/bpe/$src$tgt.bpe --vocabulary $data/preprocessed/bpe/train.vocab.$src < $data/preprocessed/bpe/train.$src.trc > $data/preprocessed/bpe/train.$src
+python3 subword_nmt/apply_bpe.py -c $data/preprocessed/bpe/$src$tgt.bpe --vocabulary $data/preprocessed/bpe/train.vocab.$tgt < $data/preprocessed/bpe/train.$tgt.trc > $data/preprocessed/bpe/train.$tgt
 
 
 # prepare remaining splits with learned models
 for split in valid test tiny_train
 do
-    #cat $data/raw/$split.$src | perl moses_scripts/normalize-punctuation.perl -l $src | perl moses_scripts/tokenizer.perl -l $src -a -q | perl moses_scripts/truecase.perl --model $data/preprocessed/bpe/tm.$src | python3 subword_nmt/apply_bpe.py -c $src$tgt.bpe --vocabulary $data/preprocessed/bpe/train.vocab.$src --vocabulary-threshold 50 > $data/preprocessed/bpe/$split.$src
-    #cat $data/raw/$split.$tgt | perl moses_scripts/normalize-punctuation.perl -l $tgt | perl moses_scripts/tokenizer.perl -l $tgt -a -q | perl moses_scripts/truecase.perl --model $data/preprocessed/bpe/tm.$tgt | python3 subword_nmt/apply_bpe.py -c $src$tgt.bpe --vocabulary $data/preprocessed/bpe/train.vocab.$tgt --vocabulary-threshold 50 > $data/preprocessed/bpe/$split.$tgt
-    cat $data/raw/$split.$src | perl moses_scripts/normalize-punctuation.perl -l $src | perl moses_scripts/tokenizer.perl -l $src -a -q | perl moses_scripts/truecase.perl --model $data/preprocessed/bpe/tm.$src | python3 subword_nmt/apply_bpe.py -c $src$tgt.bpe --vocabulary $data/preprocessed/bpe/train.vocab.$src > $data/preprocessed/bpe/$split.$src
-    cat $data/raw/$split.$tgt | perl moses_scripts/normalize-punctuation.perl -l $tgt | perl moses_scripts/tokenizer.perl -l $tgt -a -q | perl moses_scripts/truecase.perl --model $data/preprocessed/bpe/tm.$tgt | python3 subword_nmt/apply_bpe.py -c $src$tgt.bpe --vocabulary $data/preprocessed/bpe/train.vocab.$tgt > $data/preprocessed/bpe/$split.$tgt
+    cat $data/raw/$split.$src | perl moses_scripts/normalize-punctuation.perl -l $src | perl moses_scripts/tokenizer.perl -l $src -a -q | perl moses_scripts/truecase.perl --model $data/preprocessed/bpe/tm.$src | python3 subword_nmt/apply_bpe.py -c $data/preprocessed/bpe/$src$tgt.bpe --vocabulary $data/preprocessed/bpe/train.vocab.$src > $data/preprocessed/bpe/$split.$src
+    cat $data/raw/$split.$tgt | perl moses_scripts/normalize-punctuation.perl -l $tgt | perl moses_scripts/tokenizer.perl -l $tgt -a -q | perl moses_scripts/truecase.perl --model $data/preprocessed/bpe/tm.$tgt | python3 subword_nmt/apply_bpe.py -c $data/preprocessed/bpe/$src$tgt.bpe --vocabulary $data/preprocessed/bpe/train.vocab.$tgt > $data/preprocessed/bpe/$split.$tgt
 done
 
 # remove tmp files
