@@ -67,7 +67,7 @@ class BeamSearch(object):
 
 class BeamSearchNode(object):
     """ Defines a search node and stores values important for computation of beam search path"""
-    def __init__(self, search, emb, lstm_out, final_hidden, final_cell, mask, sequence, logProb, length):
+    def __init__(self, search, emb, lstm_out, final_hidden, final_cell, mask, sequence, logProb, length, logp_sequence):
 
         # Attributes needed for computation of decoder states
         self.sequence = sequence
@@ -80,10 +80,11 @@ class BeamSearchNode(object):
         # Attributes needed for computation of sequence score
         self.logp = logProb
         self.length = length
+        self.logp_sequence = logp_sequence
 
         self.search = search
 
-    def eval(self, alpha=0.0):
+    def eval(self, alpha=0.0, lamb=0.5):
         """ Returns score of sequence up to this node 
 
         params: 
@@ -94,5 +95,13 @@ class BeamSearchNode(object):
         
         """
         normalizer = (5 + self.length)**alpha / (5 + 1)**alpha
-        return self.logp / normalizer
+        #return self.logp / normalizer
+
+
+        # Regularization term for decoding
+        neg_logp_sequence = torch.neg(self.logp_sequence)
+        regularizer = (-1.0) * lamb * torch.sum(torch.square(neg_logp_sequence))
+        sum_log_p_all_steps = torch.sum(self.logp_sequence)
+
+        return (sum_log_p_all_steps + regularizer) / normalizer
         

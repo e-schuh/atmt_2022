@@ -32,6 +32,8 @@ def get_args():
     parser.add_argument('--beam-size', default=5, type=int, help='number of hypotheses expanded in beam search')
     # alpha hyperparameter for length normalization (described as lp in https://arxiv.org/pdf/1609.08144.pdf equation 14)
     parser.add_argument('--alpha', default=0.0, type=float, help='alpha for softer length normalization')
+    # lambda hyperparameter for UID decoding (described as lambda in https://aclanthology.org/2020.emnlp-main.170.pdf equation 9)
+    parser.add_argument('--lamb', default=0.5, type=float, help='lambda for UID decoding')
 
     return parser.parse_args()
 
@@ -108,8 +110,8 @@ def main(args):
                 log_p = log_p[-1]
 
                 # Store the encoder_out information for the current input sentence and beam
-                emb = encoder_out['src_embeddings'][:,i,:]
-                lstm_out = encoder_out['src_out'][0][:,i,:]
+                emb = encoder_out['src_embeddings'][:,i,:] # [src_time_steps, batch_size, embed_dim]
+                lstm_out = encoder_out['src_out'][0][:,i,:] # [src_time_steps, batch_size, output_dim]
                 final_hidden = encoder_out['src_out'][1][:,i,:]
                 final_cell = encoder_out['src_out'][2][:,i,:]
                 try:
@@ -118,23 +120,26 @@ def main(args):
                     mask = None
 
                 node = BeamSearchNode(searches[i], emb, lstm_out, final_hidden, final_cell,
-                                      mask, torch.cat((go_slice[i], next_word)), log_p, 1)
+                                      mask, torch.cat((go_slice[i], next_word)), log_p, 1,
+                                      torch.tensor(log_p.item()).unsqueeze(0))
                 # __QUESTION 3: Why do we add the node with a negative score?
-                searches[i].add(-node.eval(args.alpha), node)
+                searches[i].add(-node.eval(args.alpha, args.lamb), node) #each search contains beam_size nodes after loop
+                                                              #each node contains 1 word
 
         #import pdb;pdb.set_trace()
         # Start generating further tokens until max sentence length reached
         for _ in range(args.max_len-1):
 
             # Get the current nodes to expand
-            nodes = [n[1] for s in searches for n in s.get_current_beams()]
+            nodes = [n[1] for s in searches for n in s.get_current_beams()] #nodes stores all search nodes for all beam searches
             if nodes == []:
                 break # All beams ended in EOS
 
-            # Reconstruct prev_words, encoder_out from current beam search nodes
+            # Reconstruct prev_words, encoder_out and previous logp_sequence from current beam search nodes
             prev_words = torch.stack([node.sequence for node in nodes])
-            encoder_out["src_embeddings"] = torch.stack([node.emb for node in nodes], dim=1)
-            lstm_out = torch.stack([node.lstm_out for node in nodes], dim=1)
+            prev_logp_sequence = torch.stack([node.logp_sequence for node in nodes])
+            encoder_out["src_embeddings"] = torch.stack([node.emb for node in nodes], dim=1) # [src_time_steps, n_of_nodes , embed_dim]
+            lstm_out = torch.stack([node.lstm_out for node in nodes], dim=1) # [src_time_steps, n_of_nodes , output_dim]
             final_hidden = torch.stack([node.final_hidden for node in nodes], dim=1)
             final_cell = torch.stack([node.final_cell for node in nodes], dim=1)
             encoder_out["src_out"] = (lstm_out, final_hidden, final_cell)
@@ -162,6 +167,7 @@ def main(args):
                     log_p = torch.where(best_candidate == tgt_dict.unk_idx, backoff_log_p, best_log_p)
                     log_p = log_p[-1]
                     next_word = torch.cat((prev_words[i][1:], next_word[-1:]))
+                    logp_sequence = torch.cat((prev_logp_sequence[i], torch.tensor(log_p.item()).unsqueeze(0)))
 
                     # Get parent node and beam search object for corresponding sentence
                     node = nodes[i]
@@ -175,18 +181,21 @@ def main(args):
                         node = BeamSearchNode(
                             search, node.emb, node.lstm_out, node.final_hidden,
                             node.final_cell, node.mask, torch.cat((prev_words[i][0].view([1]),
-                            next_word)), node.logp, node.length
-                            )
-                        search.add_final(-node.eval(args.alpha), node)
+                            next_word)), node.logp, node.length, #node.logp is log prob of last non-eos token
+                                                                #node.length is length of sentence without eos tokens
+                                                                #node.sequence is sentence with eos tokens at start and end
+                            node.logp_sequence)
+                        search.add_final(-node.eval(args.alpha, args.lamb), node)
 
                     # Add the node to current nodes for next iteration
                     else:
                         node = BeamSearchNode(
                             search, node.emb, node.lstm_out, node.final_hidden,
                             node.final_cell, node.mask, torch.cat((prev_words[i][0].view([1]),
-                            next_word)), node.logp + log_p, node.length + 1
+                            next_word)), node.logp + log_p, node.length + 1,
+                            logp_sequence
                             )
-                        search.add(-node.eval(args.alpha), node)
+                        search.add(-node.eval(args.alpha, args.lamb), node)
 
             # #import pdb;pdb.set_trace()
             # __QUESTION 5: What happens internally when we prune our beams?
@@ -195,7 +204,7 @@ def main(args):
                 search.prune()
 
         # Segment into sentences
-        best_sents = torch.stack([search.get_best()[1].sequence[1:].cpu() for search in searches])
+        best_sents = torch.stack([search.get_best()[1].sequence[1:].cpu() for search in searches]) # retrieve best sequence for each beam search and remove start token
         decoded_batch = best_sents.numpy()
         #import pdb;pdb.set_trace()
 
@@ -206,7 +215,7 @@ def main(args):
         for sent in output_sentences:
             first_eos = np.where(sent == tgt_dict.eos_idx)[0]
             if len(first_eos) > 0:
-                temp.append(sent[:first_eos[0]])
+                temp.append(sent[:first_eos[0]]) #remove eos tokens
             else:
                 temp.append(sent)
         output_sentences = temp
