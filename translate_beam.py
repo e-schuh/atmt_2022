@@ -38,6 +38,9 @@ def get_args():
     # Add n-best list arguments
     parser.add_argument('--nbest', default=1, type=int, help='parameter for n-best list')
 
+    # Add gamma hyperparameter for diversity-promoting beam search
+    parser.add_argument('--gamma', default=0.0, type=float, help='gamma for diversity-promoting beam search')
+
     return parser.parse_args()
 
 
@@ -169,7 +172,12 @@ def main(args):
                     backoff_log_p = log_probs[i, :, j+1]
                     next_word = torch.where(best_candidate == tgt_dict.unk_idx, backoff_candidate, best_candidate)
                     log_p = torch.where(best_candidate == tgt_dict.unk_idx, backoff_log_p, best_log_p)
-                    log_p = log_p[-1]
+
+                    # Adjust log_p to reflect rank among siblings
+                    log_p = log_p[-1] - (j+1)*args.gamma # j+1 is the rank of the current node among its siblings as
+                                                         # tensor 'log_probs' is sorted in descending order (at j=0 highest log
+                                                         # probability is stored, at j=1 second highest etc.)
+                    
                     next_word = torch.cat((prev_words[i][1:], next_word[-1:]))
                     logp_sequence = torch.cat((prev_logp_sequence[i], torch.tensor(log_p.item()).unsqueeze(0)))
 

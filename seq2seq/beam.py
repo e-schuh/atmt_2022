@@ -116,13 +116,15 @@ class BeamSearchNode(object):
         
         """
         normalizer = (5 + self.length)**alpha / (5 + 1)**alpha
-        #return self.logp / normalizer
 
+        if lamb == 0.0:
+            # If no regularization applies (e.g., for diversity-promoting beam search in ex4)
+            return self.logp / normalizer
+        else:
+            # Regularization term for decoding
+            neg_logp_sequence = torch.neg(self.logp_sequence)
+            regularizer = (-1.0) * lamb * torch.sum(torch.square(neg_logp_sequence))
+            sum_log_p_all_steps = torch.sum(self.logp_sequence)
 
-        # Regularization term for decoding
-        neg_logp_sequence = torch.neg(self.logp_sequence)
-        regularizer = (-1.0) * lamb * torch.sum(torch.square(neg_logp_sequence))
-        sum_log_p_all_steps = torch.sum(self.logp_sequence)
-
-        return (sum_log_p_all_steps + regularizer) / normalizer
+            return (sum_log_p_all_steps + regularizer) / normalizer
         
