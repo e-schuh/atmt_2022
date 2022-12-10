@@ -35,6 +35,9 @@ def get_args():
     # lambda hyperparameter for UID decoding (described as lambda in https://aclanthology.org/2020.emnlp-main.170.pdf equation 9)
     parser.add_argument('--lamb', default=0.5, type=float, help='lambda for UID decoding')
 
+    # Add n-best list arguments
+    parser.add_argument('--nbest', default=1, type=int, help='parameter for n-best list')
+
     return parser.parse_args()
 
 
@@ -73,7 +76,8 @@ def main(args):
     progress_bar = tqdm(test_loader, desc='| Generation', leave=False)
 
     # Iterate over the test set
-    all_hyps = {}
+    all_hyps_list = [dict() for _ in range(args.nbest)] # Create a list of dictionaries for final hypotheses
+    #all_hyps = {}
     for i, sample in enumerate(progress_bar):
 
         # Create a beam search object or every input sentence in batch
@@ -204,7 +208,17 @@ def main(args):
                 search.prune()
 
         # Segment into sentences
-        best_sents = torch.stack([search.get_best()[1].sequence[1:].cpu() for search in searches]) # retrieve best sequence for each beam search and remove start token
+        n_best_sents = []
+
+        for search in searches:
+            n_best = search.get_n_best(args.nbest)
+            for i in range(len(n_best)):
+                n_best_sents.append(n_best[i][1].sequence[1:].cpu())
+
+        best_sents = torch.stack(n_best_sents)
+
+        #best_sents = torch.stack([search.get_best()[1].sequence[1:].cpu() for search in searches]) # retrieve best sequence for each beam search and remove start token
+        
         decoded_batch = best_sents.numpy()
         #import pdb;pdb.set_trace()
 
@@ -223,15 +237,29 @@ def main(args):
         # Convert arrays of indices into strings of words
         output_sentences = [tgt_dict.string(sent) for sent in output_sentences]
 
-        for ii, sent in enumerate(output_sentences):
-            all_hyps[int(sample['id'].data[ii])] = sent
+        output_sentences_list = [list() for _ in range(args.nbest)] # Create a list of lists for each of the nbest outputs
+        for i in range(len(output_sentences)):
+            output_sentences_list[i % args.nbest].append(output_sentences[i])
+
+
+        for i in range(len(all_hyps_list)):
+            all_hyps = all_hyps_list[i]
+            for ii, sent in enumerate(output_sentences_list[i]):
+                all_hyps[int(sample['id'].data[ii])] = sent
+            
+        
+        # for ii, sent in enumerate(output_sentences):
+        #     all_hyps[int(sample['id'].data[ii])] = sent
 
 
     # Write to file
     if args.output is not None:
-        with open(args.output, 'w') as out_file:
-            for sent_id in range(len(all_hyps.keys())):
-                out_file.write(all_hyps[sent_id] + '\n')
+        for i in range(len(all_hyps_list)):
+            all_hyps = all_hyps_list[i]
+            write_path = args.output + '_n' + str(i+1)
+            with open(write_path, 'w') as out_file:
+                for sent_id in range(len(all_hyps.keys())):
+                    out_file.write(all_hyps[sent_id] + '\n')
 
 
 if __name__ == '__main__':
